@@ -27,6 +27,15 @@ import {
   CalibrationPhase
 } from './engine.js';
 import { Tensor5D, StrategicTensor } from './tensor.js';
+import {
+  SkeletonGenerator,
+  SectionExpander,
+  DensityOptimizer,
+  MetricsComparator,
+  synthesizerSessions,
+  createSynthesizerSession,
+  type SynthesizerSession,
+} from './synthesizer.js';
 
 // Session store
 const sessions = new Map<string, SynthesisSession>();
@@ -191,7 +200,109 @@ const TOOLS: Tool[] = [
       },
       required: ['session_id']
     }
-  }
+  },
+
+  // ── High-Density Parallelized Synthesizer (SoT + CoD) ─────────────────────
+
+  {
+    name: 'synthesizer_open',
+    description:
+      'Initialize a High-Density Parallelized Synthesizer session. ' +
+      'Accepts raw text and returns a session_id for subsequent Phase calls.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        input_text: {
+          type: 'string',
+          description: 'The source text to be synthesized.',
+        },
+        max_points: {
+          type: 'number',
+          description: 'Maximum skeleton points to generate (3–10, default 7).',
+        },
+      },
+      required: ['input_text'],
+    },
+  },
+  {
+    name: 'synthesizer_generate_skeleton',
+    description:
+      'Phase 1 (SoT): Generate a concise outline (3–10 points, minimal words). ' +
+      'Each point is a keyword + ≤10-word brief. Returns the skeleton for Phase 2.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: { type: 'string' },
+      },
+      required: ['session_id'],
+    },
+  },
+  {
+    name: 'synthesizer_expand_point',
+    description:
+      'Phase 2 (SoT): Expand a single skeleton point into a full section. ' +
+      'Designed to be called in parallel for each point index. ' +
+      'Returns entity list and entity-density for the section.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: { type: 'string' },
+        point_index: {
+          type: 'number',
+          description: 'Index of the skeleton point to expand (0-based).',
+        },
+      },
+      required: ['session_id', 'point_index'],
+    },
+  },
+  {
+    name: 'synthesizer_density_pass',
+    description:
+      'Phase 3 (CoD): Run the Chain-of-Density pass. Identifies 1-3 missing ' +
+      'salient entities from the source text and fuses them into the combined ' +
+      'summary through compression, maintaining a fixed token budget. ' +
+      'All Phase 2 points must be expanded before calling this.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: { type: 'string' },
+      },
+      required: ['session_id'],
+    },
+  },
+  {
+    name: 'synthesizer_full_pipeline',
+    description:
+      'Run the complete SoT + CoD pipeline in one call: skeleton → parallel expand → density pass. ' +
+      'Returns the CoD-optimized summary together with per-phase metrics.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        input_text: {
+          type: 'string',
+          description: 'The source text to synthesize.',
+        },
+        max_points: {
+          type: 'number',
+          description: 'Maximum skeleton points (3–10, default 7).',
+        },
+      },
+      required: ['input_text'],
+    },
+  },
+  {
+    name: 'synthesizer_get_metrics',
+    description:
+      'Retrieve informational comparison metrics for a completed synthesizer session: ' +
+      'entity density, lead bias, and latency class for Vanilla vs Skeleton vs CoD outputs.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: { type: 'string' },
+      },
+      required: ['session_id'],
+    },
+  },
 ];
 
 // Server setup
@@ -239,6 +350,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return handleCrossDomainExtract(args as any);
       case 'architect_retrieve_synthesis':
         return handleRetrieveSynthesis(args as any);
+
+      // ── Parallelized Synthesizer ──────────────────────────────────────────
+      case 'synthesizer_open':
+        return handleSynthesizerOpen(args as any);
+      case 'synthesizer_generate_skeleton':
+        return handleSynthesizerGenerateSkeleton(args as any);
+      case 'synthesizer_expand_point':
+        return handleSynthesizerExpandPoint(args as any);
+      case 'synthesizer_density_pass':
+        return handleSynthesizerDensityPass(args as any);
+      case 'synthesizer_full_pipeline':
+        return handleSynthesizerFullPipeline(args as any);
+      case 'synthesizer_get_metrics':
+        return handleSynthesizerGetMetrics(args as any);
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -734,6 +860,285 @@ function handleRetrieveSynthesis(args: { session_id: string }) {
 
   return {
     content: [{ type: 'text', text: output }],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// High-Density Parallelized Synthesizer handlers
+// ---------------------------------------------------------------------------
+
+function handleSynthesizerOpen(args: { input_text: string; max_points?: number }) {
+  const maxPoints = Math.min(10, Math.max(3, args.max_points ?? 7));
+  const session = createSynthesizerSession(args.input_text, maxPoints);
+
+  return {
+    content: [
+      {
+        type: 'text',
+        text: `[SYNTHESIZER SESSION OPENED]
+Session ID: ${session.id}
+Max skeleton points: ${maxPoints}
+Input length: ${args.input_text.split(/\s+/).length} words
+
+Pipeline:
+  Phase 1 → synthesizer_generate_skeleton   (skeleton-of-thought outline)
+  Phase 2 → synthesizer_expand_point × N    (parallel per-point expansion)
+  Phase 3 → synthesizer_density_pass        (chain-of-density fusion)
+
+Or call synthesizer_full_pipeline to run all phases at once.`,
+      },
+    ],
+  };
+}
+
+function handleSynthesizerGenerateSkeleton(args: { session_id: string }) {
+  const session = synthesizerSessions.get(args.session_id);
+  if (!session) throw new Error(`Synthesizer session not found: ${args.session_id}`);
+
+  const generator = new SkeletonGenerator();
+  session.skeleton = generator.generate(session.inputText, session.maxPoints);
+  session.status = 'skeleton_complete';
+
+  const pointList = session.skeleton
+    .map(
+      p =>
+        `  [${p.index}] ${p.keyword.padEnd(30)} | ${p.brief}`
+    )
+    .join('\n');
+
+  return {
+    content: [
+      {
+        type: 'text',
+        text: `[PHASE 1 — SKELETON GENERATION COMPLETE]
+Session: ${args.session_id}
+Points generated: ${session.skeleton.length}
+
+IDX  KEYWORD                          BRIEF
+───  ───────────────────────────────  ──────────────────────────────────
+${pointList}
+
+Next: call synthesizer_expand_point for each index (0–${session.skeleton.length - 1}).
+      These calls can be made IN PARALLEL to minimise latency.`,
+      },
+    ],
+  };
+}
+
+function handleSynthesizerExpandPoint(args: {
+  session_id: string;
+  point_index: number;
+}) {
+  const session = synthesizerSessions.get(args.session_id);
+  if (!session) throw new Error(`Synthesizer session not found: ${args.session_id}`);
+  if (session.status === 'initialized') {
+    throw new Error('Run synthesizer_generate_skeleton (Phase 1) first.');
+  }
+
+  const point = session.skeleton[args.point_index];
+  if (!point) {
+    throw new Error(
+      `Point index ${args.point_index} out of range (0–${session.skeleton.length - 1}).`
+    );
+  }
+
+  session.status = 'expanding';
+  const expander = new SectionExpander();
+  const section = expander.expand(point, session.inputText);
+  session.expandedSections[args.point_index] = section;
+
+  const expandedCount = Object.keys(session.expandedSections).length;
+  const remaining = session.skeleton.length - expandedCount;
+  if (remaining === 0) session.status = 'expansion_complete';
+
+  return {
+    content: [
+      {
+        type: 'text',
+        text: `[PHASE 2 — SECTION EXPANDED]
+Point ${args.point_index}: "${point.keyword}"
+Brief: ${point.brief}
+
+Content:
+${section.content}
+
+Entities detected (${section.entities.length}): ${section.entities.slice(0, 10).join(', ')}${section.entities.length > 10 ? '…' : ''}
+Token count:    ~${section.tokenCount}
+Entity density: ${section.entityDensity.toFixed(4)} entities/token
+
+Progress: ${expandedCount}/${session.skeleton.length} points expanded.${
+          remaining === 0
+            ? '\nAll points expanded. Ready for synthesizer_density_pass (Phase 3).'
+            : `\n${remaining} point(s) remaining.`
+        }`,
+      },
+    ],
+  };
+}
+
+function handleSynthesizerDensityPass(args: { session_id: string }) {
+  const session = synthesizerSessions.get(args.session_id);
+  if (!session) throw new Error(`Synthesizer session not found: ${args.session_id}`);
+
+  const expandedCount = Object.keys(session.expandedSections).length;
+  if (expandedCount < session.skeleton.length) {
+    throw new Error(
+      `Only ${expandedCount}/${session.skeleton.length} points have been expanded. ` +
+        'Expand all points via synthesizer_expand_point before running the density pass.'
+    );
+  }
+
+  const optimizer = new DensityOptimizer();
+  session.densityResult = optimizer.optimize(session.expandedSections, session.inputText);
+  session.status = 'density_complete';
+
+  const r = session.densityResult;
+  const iterSummary = r.iterations
+    .map(
+      it =>
+        `  Iter ${it.iteration}: added [${it.addedEntities.join(', ')}]` +
+        ` | dropped "${it.droppedPhrases.join('", "')}"` +
+        ` | density ${it.entityDensity.toFixed(4)}`
+    )
+    .join('\n');
+
+  return {
+    content: [
+      {
+        type: 'text',
+        text: `[PHASE 3 — CHAIN-OF-DENSITY PASS COMPLETE]
+Session: ${args.session_id}
+
+Density progression:
+  Initial:  ${r.originalDensity.toFixed(4)} entities/token
+  Target:   ${r.targetDensity.toFixed(4)} entities/token (~0.15)
+  Final:    ${r.finalDensity.toFixed(4)} entities/token
+
+CoD iterations:
+${iterSummary || '  (no iterations required — target already met)'}
+
+Lead bias: ${(r.leadBias * 100).toFixed(1)}% of entities in first half
+           (lower = more distributed coverage; vanilla ≈ 72%)
+
+── FINAL SUMMARY ──────────────────────────────────────────────────────────
+${r.finalSummary}
+───────────────────────────────────────────────────────────────────────────
+
+Call synthesizer_get_metrics for the full Vanilla / Skeleton / CoD comparison table.`,
+      },
+    ],
+  };
+}
+
+function handleSynthesizerFullPipeline(args: {
+  input_text: string;
+  max_points?: number;
+}) {
+  const maxPoints = Math.min(10, Math.max(3, args.max_points ?? 7));
+  const session = createSynthesizerSession(args.input_text, maxPoints);
+
+  // Phase 1
+  const generator = new SkeletonGenerator();
+  session.skeleton = generator.generate(session.inputText, session.maxPoints);
+  session.status = 'skeleton_complete';
+
+  // Phase 2 (simulated parallel: all expansions happen synchronously here,
+  //          but each is independent and safe to parallelise client-side)
+  const expander = new SectionExpander();
+  for (const point of session.skeleton) {
+    session.expandedSections[point.index] = expander.expand(point, session.inputText);
+  }
+  session.status = 'expansion_complete';
+
+  // Phase 3
+  const optimizer = new DensityOptimizer();
+  session.densityResult = optimizer.optimize(session.expandedSections, session.inputText);
+  session.status = 'density_complete';
+
+  // Metrics
+  const comparator = new MetricsComparator();
+  session.metrics = comparator.compare(session);
+
+  const r = session.densityResult;
+  const m = session.metrics;
+
+  const skeletonPointsTable = session.skeleton
+    .map(p => `  [${p.index}] ${p.keyword.padEnd(28)} ${p.brief}`)
+    .join('\n');
+
+  const metricsTable = [
+    `${'Metric'.padEnd(24)}  ${'Vanilla'.padEnd(14)}  ${'Skeleton'.padEnd(14)}  CoD Optimized`,
+    `${'─'.repeat(24)}  ${'─'.repeat(14)}  ${'─'.repeat(14)}  ${'─'.repeat(14)}`,
+    `${'Entity Density'.padEnd(24)}  ${String(m.vanilla.entityDensity).padEnd(14)}  ${String(m.skeleton.entityDensity).padEnd(14)}  ${m.cod.entityDensity}`,
+    `${'Lead Bias'.padEnd(24)}  ${String(m.vanilla.leadBias).padEnd(14)}  ${String(m.skeleton.leadBias).padEnd(14)}  ${m.cod.leadBias}`,
+    `${'Processing'.padEnd(24)}  ${m.vanilla.processing.padEnd(14)}  ${m.skeleton.processing.padEnd(14)}  ${m.cod.processing}`,
+    `${'Speedup vs Vanilla'.padEnd(24)}  ${'1.0×'.padEnd(14)}  ${String(m.skeleton.speedupFactor + '×').padEnd(14)}  ${m.skeleton.speedupFactor + '× + 1 pass'}`,
+  ].join('\n');
+
+  return {
+    content: [
+      {
+        type: 'text',
+        text: `[SYNTHESIZER FULL PIPELINE COMPLETE]
+Session: ${session.id}
+
+── PHASE 1: SKELETON (${session.skeleton.length} points) ──────────────────────────────────
+${skeletonPointsTable}
+
+── PHASE 2: PARALLEL EXPANSION ────────────────────────────────────────────
+${session.skeleton.length} sections expanded independently (parallelisable).
+Combined token count: ~${Object.values(session.expandedSections).reduce((s, x) => s + x.tokenCount, 0)}
+
+── PHASE 3: CHAIN-OF-DENSITY PASS ─────────────────────────────────────────
+Iterations: ${r.iterations.length}
+Density:    ${r.originalDensity.toFixed(4)} → ${r.finalDensity.toFixed(4)} (target ${r.targetDensity})
+Lead bias:  ${(r.leadBias * 100).toFixed(1)}%
+
+── FINAL SUMMARY ───────────────────────────────────────────────────────────
+${r.finalSummary}
+────────────────────────────────────────────────────────────────────────────
+
+── INFORMATIONAL COMPARISON METRICS ────────────────────────────────────────
+${metricsTable}`,
+      },
+    ],
+  };
+}
+
+function handleSynthesizerGetMetrics(args: { session_id: string }) {
+  const session = synthesizerSessions.get(args.session_id);
+  if (!session) throw new Error(`Synthesizer session not found: ${args.session_id}`);
+  if (session.status === 'initialized' || session.status === 'skeleton_complete') {
+    throw new Error('Complete at least Phase 2 (expand all points) before retrieving metrics.');
+  }
+
+  const comparator = new MetricsComparator();
+  session.metrics = comparator.compare(session);
+  const m = session.metrics;
+
+  return {
+    content: [
+      {
+        type: 'text',
+        text: `[SYNTHESIZER METRICS]
+Session: ${args.session_id}
+Status:  ${session.status}
+
+┌──────────────────────────┬────────────────┬────────────────┬────────────────┐
+│ Metric                   │ Vanilla        │ Skeleton (SoT) │ CoD Optimized  │
+├──────────────────────────┼────────────────┼────────────────┼────────────────┤
+│ Entity Density           │ ${String(m.vanilla.entityDensity).padEnd(14)} │ ${String(m.skeleton.entityDensity).padEnd(14)} │ ${String(m.cod.entityDensity).padEnd(14)} │
+│ Lead Bias                │ ${String(m.vanilla.leadBias).padEnd(14)} │ ${String(m.skeleton.leadBias).padEnd(14)} │ ${String(m.cod.leadBias).padEnd(14)} │
+│ Processing               │ ${m.vanilla.processing.padEnd(14)} │ ${m.skeleton.processing.padEnd(14)} │ ${m.cod.processing.padEnd(14)} │
+│ Speedup vs Vanilla       │ 1.0×           │ ${String(m.skeleton.speedupFactor + '×').padEnd(14)} │ ${m.skeleton.speedupFactor}× + 1 pass  │
+└──────────────────────────┴────────────────┴────────────────┴────────────────┘
+
+Definitions:
+  Entity Density — named entities per token (~0.15 is human-expert preference)
+  Lead Bias      — fraction of entities in first half (lower = distributed coverage)
+  Speedup        — parallel expansion vs sequential generation`,
+      },
+    ],
   };
 }
 
