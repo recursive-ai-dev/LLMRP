@@ -436,6 +436,13 @@ export function createSynthesizerSession(
   inputText: string,
   maxPoints: number
 ): SynthesizerSession {
+  if (!inputText || inputText.trim().length === 0) {
+    throw new Error('inputText must be a non-empty string.');
+  }
+  if (!Number.isInteger(maxPoints) || maxPoints < 3 || maxPoints > 10) {
+    throw new Error(`maxPoints must be an integer between 3 and 10 (received ${maxPoints}).`);
+  }
+
   const now = new Date().toISOString();
   const session: SynthesizerSession = {
     id: uuidv4(),

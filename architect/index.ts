@@ -869,7 +869,7 @@ function handleRetrieveSynthesis(args: { session_id: string }) {
 // ---------------------------------------------------------------------------
 
 function handleSynthesizerOpen(args: { input_text: string; max_points?: number }) {
-  const maxPoints = Math.min(10, Math.max(3, args.max_points ?? 7));
+  const maxPoints = Math.min(10, Math.max(3, Math.floor(args.max_points ?? 7)));
   const session = createSynthesizerSession(args.input_text, maxPoints);
 
   return {
@@ -1036,7 +1036,7 @@ function handleSynthesizerFullPipeline(args: {
   input_text: string;
   max_points?: number;
 }) {
-  const maxPoints = Math.min(10, Math.max(3, args.max_points ?? 7));
+  const maxPoints = Math.min(10, Math.max(3, Math.floor(args.max_points ?? 7)));
   const session = createSynthesizerSession(args.input_text, maxPoints);
 
   // Phase 1
