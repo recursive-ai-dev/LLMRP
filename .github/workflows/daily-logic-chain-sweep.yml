@@ -1,0 +1,28 @@
+name: Daily Logic Chain Sweep (OpenRouter)
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  logic-chain-sweep:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run OpenRouter logic chain sweep
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          OPENROUTER_PROMPT: ${{ secrets.OPENROUTER_PROMPT }}
+        run: .github/scripts/openrouter_logic_sweep.sh
+
+      - name: Upload sweep output
+        uses: actions/upload-artifact@v4
+        with:
+          name: openrouter-logic-sweep
+          path: openrouter-logic-sweep.json
