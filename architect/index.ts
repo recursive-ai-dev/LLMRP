@@ -982,13 +982,22 @@ function handleSynthesizerDensityPass(args: { session_id: string }) {
   const session = getSession(args.session_id);
   if (!session) throw new Error(`Synthesizer session not found: ${args.session_id}`);
 
-  const expandedCount = Object.keys(session.expandedSections).length;
-  if (expandedCount < session.skeleton.length) {
-    throw new Error(
-      `Only ${expandedCount}/${session.skeleton.length} points have been expanded. ` +
-        'Expand all points via synthesizer_expand_point before running the density pass.'
-    );
-  }
+  function handleSynthesizerDensityPass(args: { session_id: string }) {
+    const session = getSession(args.session_id);
+    if (!session) throw new Error(`Synthesizer session not found: ${args.session_id}`);
+    if (session.skeleton.length === 0) {
+      throw new Error(
+        'Phase 1 must produce at least one skeleton point before the density pass.'
+      );
+    }
+
+    const expandedCount = Object.keys(session.expandedSections).length;
+    if (expandedCount < session.skeleton.length) {
+      throw new Error(
+        `Only ${expandedCount}/${session.skeleton.length} points have been expanded. ` +
+          'Expand all points via synthesizer_expand_point before running the density pass.'
+      );
+    }
 
   const optimizer = new DensityOptimizer();
   session.densityResult = optimizer.optimize(session.expandedSections, session.inputText);
