@@ -69,6 +69,7 @@ export interface SynthesizerSession {
     | 'expansion_complete'
     | 'density_complete';
   createdAt: string;
+  lastAccessed: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -83,9 +84,20 @@ export class SkeletonGenerator {
   }
 
   private splitSentences(text: string): string[] {
-    return text
+    // Guard against abbreviations (Dr., Mr., Ms., U.S., single initials, ordinals)
+    // by replacing their trailing periods with a placeholder before splitting.
+    const ABBREV = /\b(Dr|Mr|Mrs|Ms|Prof|Sr|Jr|vs|etc|approx|U\.S|U\.K|e\.g|i\.e)\./g;
+    const INITIAL = /\b([A-Z])\./g;
+    const ORDINAL = /\b(\d+)\./g;
+
+    const protected_ = text
+      .replace(ABBREV, '$1\x00')
+      .replace(INITIAL, '$1\x00')
+      .replace(ORDINAL, '$1\x00');
+
+    return protected_
       .split(/(?<=[.!?])\s+/)
-      .map(s => s.trim())
+      .map(s => s.replace(/\x00/g, '.').trim())
       .filter(s => s.length > 20);
   }
 
@@ -163,10 +175,10 @@ export class SectionExpander {
       return relevant.slice(0, 3).join(' ').trim();
     }
 
-    // Fallback: take a positional chunk of the source
-    const chunkSize = Math.max(1, Math.floor(sentences.length / 5));
-    const startIdx = point.index * chunkSize;
-    return sentences.slice(startIdx, startIdx + chunkSize).join(' ').trim();
+    // Fallback: take a positional chunk of the source, clamped to valid range.
+    const chunkSize = Math.max(1, Math.min(Math.floor(sentences.length / 5), sentences.length));
+    const startIdx = Math.max(0, Math.min(point.index * chunkSize, Math.max(0, sentences.length - chunkSize)));
+    return sentences.slice(startIdx, startIdx + chunkSize).join(' ').trim() || sentences[0] || '';
   }
 
   extractEntities(text: string): string[] {
@@ -304,20 +316,41 @@ export class DensityOptimizer {
       }
     }
 
-    // Fuse missing entities at contextually relevant positions
-    for (const entity of entitiesToAdd) {
-      // Insert after the first sentence whose content is thematically adjacent
-      const firstStop = newSummary.search(/[.!?]\s/);
-      if (firstStop !== -1) {
-        const insertAt = firstStop + 1;
-        newSummary =
-          newSummary.slice(0, insertAt) +
-          ` Notably, ${entity} is a salient factor.` +
-          newSummary.slice(insertAt);
-      } else {
-        newSummary += ` Notably, ${entity} is a salient factor.`;
-      }
+    // Fuse missing entities distributed across sentences (not all at the same point).
+    const FUSION_TEMPLATES = [
+      (e: string) => `Notably, ${e} plays a key role.`,
+      (e: string) => `Importantly, ${e} should be considered.`,
+      (e: string) => `Additionally, ${e} influences this outcome.`,
+    ];
+
+    // Split into sentence boundary segments so we can insert at varied positions.
+    const sentenceBoundaries: number[] = [];
+    const boundaryRe = /[.!?]\s+/g;
+    let m: RegExpExecArray | null;
+    while ((m = boundaryRe.exec(newSummary)) !== null) {
+      sentenceBoundaries.push(m.index + m[0].indexOf(' ') + 1); // position after the punctuation
     }
+
+    // Distribute insertion points evenly across the summary.
+    entitiesToAdd.forEach((entity, i) => {
+      const template = FUSION_TEMPLATES[i % FUSION_TEMPLATES.length];
+      const phrase = ' ' + template(entity);
+
+      // Pick an insertion index roughly evenly spaced through the sentence list.
+      const slotFraction = (i + 1) / (entitiesToAdd.length + 1);
+      const slotIdx = Math.round(slotFraction * (sentenceBoundaries.length - 1));
+      const insertAt = sentenceBoundaries.length > 0
+        ? sentenceBoundaries[Math.max(0, slotIdx)]
+        : newSummary.length;
+
+      newSummary = newSummary.slice(0, insertAt) + phrase + newSummary.slice(insertAt);
+
+      // Shift all subsequent boundary positions to account for the inserted text.
+      const shift = phrase.length;
+      for (let j = slotIdx; j < sentenceBoundaries.length; j++) {
+        sentenceBoundaries[j] += shift;
+      }
+    });
 
     return { newSummary: newSummary.trim(), droppedPhrases };
   }
@@ -347,11 +380,13 @@ export class MetricsComparator {
     const speedupFactor =
       Math.round(Math.max(1.5, Math.sqrt(sectionCount) * 1.1) * 10) / 10;
 
-    // Vanilla baseline: sequential, low entity coverage (~0.05-0.08)
+    // Vanilla baseline: modeled/approximate values, not empirically derived.
+    // These are illustrative estimations based on observed patterns in sequential
+    // summarization and are intentionally static for comparison purposes only.
     const vanillaEntityDensity = parseFloat(
       (0.053 + sectionCount * 0.004).toFixed(3)
     );
-    const vanillaLeadBias = 0.72; // Vanilla summaries front-load information
+    const vanillaLeadBias = 0.72; // Approximate: vanilla summaries front-load information
 
     // Skeleton: parallelised, moderate density
     const skeletonLeadBias = 0.52; // More balanced coverage
@@ -382,15 +417,26 @@ export class MetricsComparator {
 }
 
 // ---------------------------------------------------------------------------
-// Session Store (exported for use by index.ts)
+// Session Store with TTL eviction (exported for use by index.ts)
 // ---------------------------------------------------------------------------
 
+/** Sessions idle longer than this are evicted by the background sweeper. */
+const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes (configurable)
+
 export const synthesizerSessions = new Map<string, SynthesizerSession>();
+
+/** Touch lastAccessed on every session lookup so the TTL stays accurate. */
+export function getSession(id: string): SynthesizerSession | undefined {
+  const session = synthesizerSessions.get(id);
+  if (session) session.lastAccessed = new Date().toISOString();
+  return session;
+}
 
 export function createSynthesizerSession(
   inputText: string,
   maxPoints: number
 ): SynthesizerSession {
+  const now = new Date().toISOString();
   const session: SynthesizerSession = {
     id: uuidv4(),
     inputText,
@@ -398,8 +444,22 @@ export function createSynthesizerSession(
     skeleton: [],
     expandedSections: {},
     status: 'initialized',
-    createdAt: new Date().toISOString(),
+    createdAt: now,
+    lastAccessed: now,
   };
   synthesizerSessions.set(session.id, session);
   return session;
 }
+
+// Background TTL sweeper — evicts sessions idle longer than SESSION_TTL_MS.
+// Runs every 5 minutes; the interval is unref'd so it doesn't prevent process exit.
+const _sweeper = setInterval(() => {
+  const cutoff = Date.now() - SESSION_TTL_MS;
+  for (const [id, session] of synthesizerSessions) {
+    if (new Date(session.lastAccessed).getTime() < cutoff) {
+      synthesizerSessions.delete(id);
+    }
+  }
+}, 5 * 60 * 1000);
+// Allow the process to exit even if the sweeper interval is still pending.
+if (typeof _sweeper.unref === 'function') _sweeper.unref();

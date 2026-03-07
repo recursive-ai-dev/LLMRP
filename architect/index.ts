@@ -33,6 +33,7 @@ import {
   DensityOptimizer,
   MetricsComparator,
   synthesizerSessions,
+  getSession,
   createSynthesizerSession,
   type SynthesizerSession,
 } from './synthesizer.js';
@@ -892,7 +893,7 @@ Or call synthesizer_full_pipeline to run all phases at once.`,
 }
 
 function handleSynthesizerGenerateSkeleton(args: { session_id: string }) {
-  const session = synthesizerSessions.get(args.session_id);
+  const session = getSession(args.session_id);
   if (!session) throw new Error(`Synthesizer session not found: ${args.session_id}`);
 
   const generator = new SkeletonGenerator();
@@ -929,7 +930,7 @@ function handleSynthesizerExpandPoint(args: {
   session_id: string;
   point_index: number;
 }) {
-  const session = synthesizerSessions.get(args.session_id);
+  const session = getSession(args.session_id);
   if (!session) throw new Error(`Synthesizer session not found: ${args.session_id}`);
   if (session.status === 'initialized') {
     throw new Error('Run synthesizer_generate_skeleton (Phase 1) first.');
@@ -942,13 +943,14 @@ function handleSynthesizerExpandPoint(args: {
     );
   }
 
-  session.status = 'expanding';
   const expander = new SectionExpander();
   const section = expander.expand(point, session.inputText);
   session.expandedSections[args.point_index] = section;
 
   const expandedCount = Object.keys(session.expandedSections).length;
   const remaining = session.skeleton.length - expandedCount;
+  // Only advance status when all points are done; avoid racing on 'expanding'
+  // in concurrent calls (each invocation is independent and idempotent).
   if (remaining === 0) session.status = 'expansion_complete';
 
   return {
@@ -977,7 +979,7 @@ Progress: ${expandedCount}/${session.skeleton.length} points expanded.${
 }
 
 function handleSynthesizerDensityPass(args: { session_id: string }) {
-  const session = synthesizerSessions.get(args.session_id);
+  const session = getSession(args.session_id);
   if (!session) throw new Error(`Synthesizer session not found: ${args.session_id}`);
 
   const expandedCount = Object.keys(session.expandedSections).length;
@@ -1106,7 +1108,7 @@ ${metricsTable}`,
 }
 
 function handleSynthesizerGetMetrics(args: { session_id: string }) {
-  const session = synthesizerSessions.get(args.session_id);
+  const session = getSession(args.session_id);
   if (!session) throw new Error(`Synthesizer session not found: ${args.session_id}`);
   if (session.status === 'initialized' || session.status === 'skeleton_complete') {
     throw new Error('Complete at least Phase 2 (expand all points) before retrieving metrics.');
