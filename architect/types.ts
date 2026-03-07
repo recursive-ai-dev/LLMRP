@@ -186,3 +186,15 @@ export interface RedTeamResult {
   probabilityOfError: string;
   recommendations: string[];
 }
+
+// ---------------------------------------------------------------------------
+// High-Density Parallelized Synthesizer (SoT + CoD) — re-exported for consumers
+// ---------------------------------------------------------------------------
+export type {
+  SkeletonPoint,
+  ExpandedSection,
+  CoDIteration,
+  DensityResult,
+  SynthesizerMetrics,
+  SynthesizerSession,
+} from './synthesizer.js';
