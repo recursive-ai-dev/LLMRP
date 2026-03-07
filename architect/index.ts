@@ -37,6 +37,7 @@ import {
   createSynthesizerSession,
   type SynthesizerSession,
 } from './synthesizer.js';
+import { runReActSynthesis } from './react_agent.js';
 
 // Session store
 const sessions = new Map<string, SynthesisSession>();
@@ -304,6 +305,35 @@ const TOOLS: Tool[] = [
       required: ['session_id'],
     },
   },
+
+  // ── Strategic ReAct Agent with ToT Backtracking ───────────────────────────
+
+  {
+    name: 'synthesizer_react_synthesize',
+    description:
+      'Run the Strategic ReAct Agent with Tree-of-Thought (ToT) Backtracking. ' +
+      'The agent executes a Thought-Act-Observation loop over the SoT+CoD synthesis ' +
+      'pipeline. When an observation reveals a tool failure or logical contradiction, ' +
+      'the agent backtracks to the prior successful node, prunes the failed branch, ' +
+      'and explores an alternative path (e.g. reduced skeleton size, fallback expansion). ' +
+      'Every conclusion is anchored to a verifiable tool observation, preventing ' +
+      'hallucinated reasoning. Returns the final synthesis together with the full ' +
+      'reasoning trace showing every Thought-Act-Observation triple.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        input_text: {
+          type: 'string',
+          description: 'The source text to synthesize (must be non-empty).',
+        },
+        max_points: {
+          type: 'number',
+          description: 'Maximum skeleton points to generate (3–10, default 7).',
+        },
+      },
+      required: ['input_text'],
+    },
+  },
 ];
 
 // Server setup
@@ -365,6 +395,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return handleSynthesizerFullPipeline(args as any);
       case 'synthesizer_get_metrics':
         return handleSynthesizerGetMetrics(args as any);
+
+      // ── ReAct Agent ───────────────────────────────────────────────────────
+      case 'synthesizer_react_synthesize':
+        return handleSynthesizerReactSynthesize(args as any);
 
       default:
         throw new Error(`Unknown tool: ${name}`);
@@ -982,22 +1016,19 @@ function handleSynthesizerDensityPass(args: { session_id: string }) {
   const session = getSession(args.session_id);
   if (!session) throw new Error(`Synthesizer session not found: ${args.session_id}`);
 
-  function handleSynthesizerDensityPass(args: { session_id: string }) {
-    const session = getSession(args.session_id);
-    if (!session) throw new Error(`Synthesizer session not found: ${args.session_id}`);
-    if (session.skeleton.length === 0) {
-      throw new Error(
-        'Phase 1 must produce at least one skeleton point before the density pass.'
-      );
-    }
+  if (session.skeleton.length === 0) {
+    throw new Error(
+      'Phase 1 must produce at least one skeleton point before the density pass.'
+    );
+  }
 
-    const expandedCount = Object.keys(session.expandedSections).length;
-    if (expandedCount < session.skeleton.length) {
-      throw new Error(
-        `Only ${expandedCount}/${session.skeleton.length} points have been expanded. ` +
-          'Expand all points via synthesizer_expand_point before running the density pass.'
-      );
-    }
+  const expandedCount = Object.keys(session.expandedSections).length;
+  if (expandedCount < session.skeleton.length) {
+    throw new Error(
+      `Only ${expandedCount}/${session.skeleton.length} points have been expanded. ` +
+        'Expand all points via synthesizer_expand_point before running the density pass.'
+    );
+  }
 
   const optimizer = new DensityOptimizer();
   session.densityResult = optimizer.optimize(session.expandedSections, session.inputText);
@@ -1148,6 +1179,48 @@ Definitions:
   Entity Density — named entities per token (~0.15 is human-expert preference)
   Lead Bias      — fraction of entities in first half (lower = distributed coverage)
   Speedup        — parallel expansion vs sequential generation`,
+      },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Strategic ReAct Agent handler
+// ---------------------------------------------------------------------------
+
+function handleSynthesizerReactSynthesize(args: {
+  input_text: string;
+  max_points?: number;
+}) {
+  const maxPoints = Math.min(10, Math.max(3, Math.floor(args.max_points ?? 7)));
+  const trace = runReActSynthesis(args.input_text, maxPoints);
+
+  const statusIcon = trace.status === 'complete' ? '✓' : '✗';
+
+  const nodeLines = trace.nodes
+    .map(n =>
+      [
+        `[depth ${n.depth}] ${n.action.toUpperCase()} — ${n.status.toUpperCase()}`,
+        `  Thought:     ${n.thought}`,
+        `  Observation: ${n.observation}`,
+      ].join('\n')
+    )
+    .join('\n\n');
+
+  return {
+    content: [
+      {
+        type: 'text',
+        text: `[REACT SYNTHESIZER — ${statusIcon} ${trace.status.toUpperCase()}]
+Session:          ${trace.sessionId}
+Backtracks:       ${trace.backtrackCount}
+Reasoning nodes:  ${trace.nodes.length}
+
+── REASONING TRACE (Thought-Act-Observe) ─────────────────────────────────────
+${nodeLines}
+
+── FINAL OUTPUT ──────────────────────────────────────────────────────────────
+${trace.finalOutput ?? '(synthesis failed — see reasoning trace for details)'}`,
       },
     ],
   };
