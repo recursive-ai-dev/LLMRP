@@ -1,0 +1,28 @@
+name: Daily Stress Bugfix (Qwen)
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  qwen-stress-bugfix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Qwen stress testing + bugfix generation
+        env:
+          ALIBABA_API_KEY: ${{ secrets.ALIBABA_API_KEY }}
+          QWEN_MODEL: ${{ secrets.QWEN_MODEL }}
+          QWEN_PROMPT: ${{ secrets.QWEN_PROMPT }}
+        run: .github/scripts/qwen_stress_bugfix.sh
+
+      - name: Upload Qwen output
+        uses: actions/upload-artifact@v4
+        with:
+          name: qwen-stress-bugfix
+          path: qwen-stress-bugfix.json

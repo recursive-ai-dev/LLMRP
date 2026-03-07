@@ -1,0 +1,30 @@
+name: Daily Polish (CodRabbit -> Kilo fallback)
+
+on:
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run polishing pass
+        env:
+          CODRABBIT_API_KEY: ${{ secrets.CODRABBIT_API_KEY }}
+          CODRABBIT_MODEL: ${{ secrets.CODRABBIT_MODEL }}
+          KILO_API_KEY: ${{ secrets.KILO_API_KEY }}
+          KILO_MODEL: ${{ secrets.KILO_MODEL }}
+          POLISH_PROMPT: ${{ secrets.POLISH_PROMPT }}
+        run: .github/scripts/polish_codrabbit_or_kilo.sh
+
+      - name: Upload polish output
+        uses: actions/upload-artifact@v4
+        with:
+          name: polishing-output
+          path: polishing-output.json

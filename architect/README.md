@@ -154,7 +154,7 @@ architect-mcp-server/
 
 ## License
 
-MIT
+Apache-2.0
 
 ---
 
