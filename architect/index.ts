@@ -417,13 +417,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 // Handler implementations
-function handleOpenSynthesis(args: {
+
+// DSM-05 fix: session creation extracted so both handleOpenSynthesis and
+// handleFullSynthesis can obtain the session ID from the Map directly,
+// without parsing it from a display string.
+function openSynthesisSession(args: {
   dataset_description: string;
   domains: string[];
   stakes?: string;
   audience?: string;
   constraints?: any;
-}) {
+}): string {
   const sessionId = uuidv4();
   const session: SynthesisSession = {
     id: sessionId,
@@ -437,8 +441,19 @@ function handleOpenSynthesis(args: {
     tensor: new StrategicTensor(args.domains.length),
     status: 'initialized'
   };
-
   sessions.set(sessionId, session);
+  return sessionId;
+}
+
+function handleOpenSynthesis(args: {
+  dataset_description: string;
+  domains: string[];
+  stakes?: string;
+  audience?: string;
+  constraints?: any;
+}) {
+  const sessionId = openSynthesisSession(args);
+  const session = sessions.get(sessionId)!;
 
   return {
     content: [
@@ -464,6 +479,13 @@ function handleStepBack(args: { session_id: string; dataset: string }) {
   const session = sessions.get(args.session_id);
   if (!session) {
     throw new Error(`Session not found: ${args.session_id}`);
+  }
+
+  if (session.status !== 'initialized') {
+    throw new Error(
+      `Phase I (Step-Back) can only run on an initialized session. ` +
+      `Current status: "${session.status}". Open a new session to re-run abstraction.`
+    );
   }
 
   const phase = new StepBackPhase();
@@ -631,7 +653,31 @@ function handleSynthesize(args: { session_id: string }) {
     session.phases.evaluation,
     session.audience
   );
-  
+
+  // DSM-02 fix: make the 5D StrategicTensor load-bearing.
+  // The tensor holds Xavier-initialised cross-domain weights; blend its
+  // getCrossDomainCorrelation() scores (sigmoid-normalised to [0,1]) with
+  // the skeleton's raw nexus confidence: 70% structural / 30% tensor.
+  const tensor = session.tensor as unknown as StrategicTensor;
+  result.correlations.forEach((corr, i) => {
+    const nexus = session.phases.skeleton!.nexusPoints[i];
+    if (!nexus) return;
+    const domainAIdx = session.domains.indexOf(nexus.domainA as Domain);
+    const domainBIdx = session.domains.indexOf(nexus.domainB as Domain);
+    if (domainAIdx >= 0 && domainBIdx >= 0) {
+      const rawTensor = tensor.getCrossDomainCorrelation(domainAIdx, domainBIdx, 0);
+      // Sigmoid-normalise: maps any real score to (0,1)
+      const normTensor = 1 / (1 + Math.exp(-rawTensor));
+      const blended = 0.7 * nexus.confidence + 0.3 * normTensor;
+      corr.confidence = Math.round(blended * 1000) / 1000;
+      corr.interpretation =
+        `Tensor-weighted cross-domain correlation: ${(blended * 100).toFixed(1)}% ` +
+        `(structural ${(nexus.confidence * 100).toFixed(0)}% × 0.7 + ` +
+        `tensor ${(normTensor * 100).toFixed(0)}% × 0.3). ` +
+        `Primary risk: ${nexus.misinterpretationRisk}`;
+    }
+  });
+
   session.phases.synthesis = result;
   session.status = 'synthesis_complete';
 
@@ -737,19 +783,14 @@ async function handleFullSynthesis(args: {
   stakes?: string;
   audience?: string;
 }) {
-  // Run all phases in sequence
-  const openResult = handleOpenSynthesis({
+  // DSM-05 fix: obtain session ID from the shared creation helper rather than
+  // parsing it from handleOpenSynthesis's human-readable display string.
+  const sessionId = openSynthesisSession({
     dataset_description: args.dataset_description,
     domains: args.domains,
     stakes: args.stakes,
     audience: args.audience
   });
-
-  const sessionIdMatch = openResult.content[0].text.match(/Session ID: ([a-f0-9-]+)/);
-  if (!sessionIdMatch) {
-    throw new Error('Failed to extract session ID');
-  }
-  const sessionId = sessionIdMatch[1];
 
   // Execute all phases
   handleStepBack({ session_id: sessionId, dataset: args.dataset });
@@ -808,6 +849,19 @@ function handleRedTeam(args: {
   };
 }
 
+// DSM-04: representative vocabulary for each domain, used for TF-based
+// presence detection in the dataset text.
+const DOMAIN_KEYWORDS: Record<string, string[]> = {
+  technical:    ['system', 'code', 'api', 'data', 'algorithm', 'stack', 'latency', 'pipeline', 'service', 'database'],
+  economic:     ['cost', 'revenue', 'market', 'price', 'profit', 'budget', 'investment', 'capital', 'growth', 'value'],
+  political:    ['policy', 'regulation', 'compliance', 'government', 'law', 'mandate', 'legislation', 'authority', 'governance'],
+  social:       ['user', 'community', 'behavior', 'culture', 'adoption', 'engagement', 'trust', 'team', 'stakeholder'],
+  environmental:['energy', 'carbon', 'emission', 'waste', 'resource', 'sustainability', 'climate', 'impact', 'footprint'],
+  legal:        ['liability', 'contract', 'intellectual', 'patent', 'license', 'audit', 'litigation', 'terms', 'agreement'],
+  ethical:      ['fairness', 'bias', 'privacy', 'transparency', 'consent', 'accountability', 'equity', 'harm', 'principle'],
+  temporal:     ['time', 'deadline', 'schedule', 'delay', 'cycle', 'duration', 'roadmap', 'horizon', 'milestone', 'quarter'],
+};
+
 function handleCrossDomainExtract(args: {
   dataset: string;
   source_domains: string[];
@@ -816,17 +870,50 @@ function handleCrossDomainExtract(args: {
 }) {
   const minConfidence = args.min_confidence || 0.6;
 
-  // Simulate cross-domain extraction
-  const extraction = {
-    signals: [
-      { domain: args.source_domains[0], target: args.target_domains[0], strength: 0.85, confidence: 0.78 },
-      { domain: args.source_domains[1] || args.source_domains[0], target: args.target_domains[1] || args.target_domains[0], strength: 0.72, confidence: 0.81 },
-    ].filter(s => s.confidence >= minConfidence),
-    gaps: [
-      'Missing temporal data for longitudinal analysis',
-      'Insufficient cross-domain correlation metrics'
-    ]
-  };
+  // DSM-04 fix: compute domain presence from actual dataset content via term
+  // frequency rather than returning hardcoded values.
+  const words = args.dataset.toLowerCase().split(/\W+/).filter(Boolean);
+  const totalWords = Math.max(words.length, 1);
+
+  function domainPresence(domain: string): number {
+    const keywords = DOMAIN_KEYWORDS[domain.toLowerCase()] || [domain.toLowerCase()];
+    const hits = keywords.reduce((sum, kw) => {
+      // count partial matches (e.g. "economic" matches "economics")
+      return sum + words.filter(w => w.startsWith(kw) || kw.startsWith(w)).length;
+    }, 0);
+    // Normalise: hits per 1000 words, capped at 1.0
+    return Math.min(1.0, (hits / totalWords) * 1000 / keywords.length);
+  }
+
+  const signals: Array<{ domain: string; target: string; strength: number; confidence: number }> = [];
+  const seen = new Set<string>();
+  for (const src of args.source_domains) {
+    for (const tgt of args.target_domains) {
+      if (src === tgt) continue;
+      const pairKey = [src, tgt].sort().join('|');
+      if (seen.has(pairKey)) continue;
+      seen.add(pairKey);
+      const srcP = domainPresence(src);
+      const tgtP = domainPresence(tgt);
+      // Strength = geometric mean; confidence = harmonic mean (penalises weak links)
+      const strength = Math.sqrt(srcP * tgtP);
+      const confidence = srcP + tgtP > 0 ? (2 * srcP * tgtP) / (srcP + tgtP) : 0;
+      if (confidence >= minConfidence) {
+        signals.push({ domain: src, target: tgt, strength: Math.round(strength * 1000) / 1000, confidence: Math.round(confidence * 1000) / 1000 });
+      }
+    }
+  }
+
+  // Gaps: domains mentioned in the request but weakly represented in the dataset
+  const allDomains = [...new Set([...args.source_domains, ...args.target_domains])];
+  const gaps: string[] = allDomains
+    .filter(d => domainPresence(d) < 0.05)
+    .map(d => `Domain "${d}" has minimal signal in dataset — cross-domain inference unreliable`);
+  if (gaps.length === 0) {
+    gaps.push(`All requested domains have detectable signal at confidence ≥ ${minConfidence}`);
+  }
+
+  const extraction = { signals, gaps };
 
   let output = `[CROSS-DOMAIN KNOWLEDGE EXTRACTION]\n\n`;
   output += `Source domains: ${args.source_domains.join(', ')}\n`;

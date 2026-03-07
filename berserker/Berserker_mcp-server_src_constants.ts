@@ -46,6 +46,23 @@ export const SWIFT_STRIKE: ElderMagicConfig = {
 // In-memory battle sessions. Sessions live as long as the server lives.
 export const SESSIONS = new Map<string, import("./types.js").BerserkerSession>();
 
+// DSM-06 fix: sessions are silently destroyed on restart, making a "never
+// created" error indistinguishable from a "was lost" error. A TTL sweeper
+// makes the eviction policy explicit and prevents unbounded memory growth.
+const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes — matches Architect synthesizer
+
+const _berserkerSweeper = setInterval(() => {
+  const cutoff = Date.now() - SESSION_TTL_MS;
+  for (const [id, session] of SESSIONS) {
+    if (new Date(session.created_at).getTime() < cutoff) {
+      SESSIONS.delete(id);
+    }
+  }
+}, 5 * 60 * 1000); // check every 5 minutes
+
+// Do not prevent the process from exiting cleanly.
+if (typeof _berserkerSweeper.unref === 'function') _berserkerSweeper.unref();
+
 // ── Limits ──────────────────────────────────────────────────
 export const MAX_CODE_INPUT_CHARS = 100_000;
 export const MAX_FILE_SIZE_BYTES = 512 * 1024; // 512KB
