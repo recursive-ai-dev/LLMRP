@@ -610,7 +610,130 @@ while still doing serious analytical work.
 
 ---
 
-If you’d like, I can now:  
-- Tailor one of the chains specifically to code review, product design, or TTRPG campaigns, or  
+## Chain IV — The Skeleton Inquest
+*Rapid structural mapping before any deep investigation begins*
+
+The Archivist does not enter the archive without a map.
+The Skeleton-of-Thought (SoT) protocol gives the Archivist that map —
+produced in seconds, before a single tome is opened in depth.
+
+### The Two-Stage Inquest Protocol
+
+```
+Stage 1 — THE INQUEST SKELETON (Archivist delivers immediately):
+  Input:  Case description only — the observable symptoms of the failing system
+  Output: 3–7 investigation fronts, one sentence each
+  Rule:   No deep analysis. Structure only. Naming only.
+  Delivery: The skeleton IS the first output. Delivered before any artifact is opened.
+
+Stage 2 — PARALLEL INVESTIGATION:
+  INDEPENDENT fronts: investigated simultaneously
+  DEPENDENT fronts: investigated in declared order only
+  Effect: A broken kingdom with 5 independent failure modes is investigated ~2x faster
+          than sequential autopsy
+```
+
+### When SoT Applies to the Inquest
+
+```
+SoT OPTIMAL:
+  → A kingdom with multiple distinct failure categories (political, architectural, operational, human)
+  → A system with independent subsystems that can fail separately
+  → Post-mortems with multiple unrelated contributing factors
+
+SoT SUBOPTIMAL:
+  → A single cascading failure where cause A must be confirmed before cause B can be named
+  → A corruption that flows through the system linearly (Stage 2 depends on Stage 1 output)
+  → Any investigation where the first finding determines the shape of all subsequent findings
+```
+
+### Prompt Template: The Skeleton Inquest
+
+```
+Seeker, you have described a broken realm.
+Before the Archivist opens a single scroll, she applies the Skeleton Inquest.
+
+The case: [DESCRIBE THE FAILING SYSTEM OR PROJECT]
+Observable symptoms: [LIST ALL KNOWN FAILURE SIGNALS]
+
+STAGE 1 — THE INQUEST SKELETON:
+
+From the symptoms alone, the Archivist names the investigation fronts:
+
+FRONT 1: [failure category] — [one-sentence description of likely wound]
+  → INDEPENDENT / DEPENDS ON: [Front N]
+
+FRONT 2: [failure category] — [one-sentence description]
+  → INDEPENDENT / DEPENDS ON: [Front N]
+
+...
+
+PARALLEL ELIGIBLE: [list of independent fronts]
+SEQUENTIAL REQUIRED: [ordered pairs where one front depends on another]
+
+The skeleton is delivered now. The first scroll has not yet been opened.
+Confirm the fronts. Add missing wounds. Remove fronts that do not apply.
+When the map is confirmed, Stage 2 begins.
+```
+
+```
+STAGE 2 — PARALLEL INVESTIGATION:
+
+Skeleton confirmed. Artifacts brought forward.
+
+For each PARALLEL ELIGIBLE front:
+  [PASTE RELEVANT ARTIFACT]
+  Apply the standard Archivist autopsy to this front:
+  - Structural wounds
+  - Operational wounds
+  - Human wounds
+  - Hidden risks not yet triggered
+
+These autopsies run in parallel — the Archivist does not wait for
+Front 1’s wounds to be catalogued before beginning Front 2’s dissection,
+when those fronts are independent.
+
+For SEQUENTIAL pairs: complete front N before beginning front N+1.
+Pass front N’s findings explicitly into front N+1’s context.
+
+When all fronts are complete:
+→ Produce the Rot Map: root causes and all symptoms they spawn
+→ Rank root causes by: speed of destruction / total cost / difficulty of reversal
+→ Produce 2–3 Restoration Playbooks
+```
+
+### Integration with Chain I (The Broken Kingdom Dossier)
+
+The Skeleton Inquest replaces Prompt 1 of Chain I and enhances Prompt 2.
+
+```
+Standard Chain I:              Skeleton Inquest Enhancement:
+Prompt 1 — The Summons        → ENHANCED: Produce SoT skeleton before any artifact is opened
+Prompt 2 — First Autopsy      → ENHANCED: All independent fronts autopsied in parallel
+Prompt 3 — Cross-Contagion    → Preserved: Cross-reference across completed autopsies
+Prompt 4 — Ledger of Blame    → Preserved: Ranking and cost analysis
+Prompt 5 — Edicts             → Preserved: Restoration playbooks
+```
+
+The Skeleton Inquest does not replace the depth of the Archivist’s investigation.
+It accelerates the arrival of structure — so the Seeker can see the shape of the
+inquest before the ink is dry on the first page.
+
+---
+
+> *"The archivist who enters without a map is a visitor, not an investigator.*
+> *Name the rooms before you enter them.*
+> *The skeleton does not make the investigation faster.*
+> *It makes the investigation findable."*
+
+---
+
+**Version**: 1.1.0
+**Black Library Updated**: 2026 — *The Skeleton Inquest is now standard procedure.*
+
+---
+
+If you’d like, I can now:
+- Tailor one of the chains specifically to code review, product design, or TTRPG campaigns, or
 - Turn the MCP concept into a concrete JSON/OpenAPI-ish tool schema.
 

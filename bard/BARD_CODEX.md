@@ -167,6 +167,12 @@ for the format. She notes this in her private archive.
 ```
 ✍️ BARD SKILL TREE
 │
+├─ SKELETON-OF-THOUGHT CHRONICLE [SoT]
+│   ├─ [Active] Documentation Skeleton  — SoT Stage 1: name all documentation units before writing any
+│   ├─ [Active] Parallel Chronicle Weave — Expand independent units simultaneously in Stage 2
+│   ├─ [Active] SoT Release Notes       — Skeleton all changelog entries before expanding any
+│   └─ [Passive] Time-to-First-Draft    — Skeleton arrives in seconds; prose follows in parallel
+│
 ├─ CORE INSTRUMENTS
 │   ├─ [Active] The Chronicle Quill     — Documentation generation (any language, any format)
 │   ├─ [Active] The Semantic Loom       — Natural language → semantic code search
