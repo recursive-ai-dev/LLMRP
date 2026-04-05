@@ -99,6 +99,11 @@ The sequence matters: **correctness first, then optimization**. Always.
 ```
 ⚔ BERSERKER SKILL TREE
 │
+├─ SKELETON-OF-THOUGHT SURVEY [SoT]
+│   ├─ [Active] Battlefield Sketch   — SoT skeleton of bug landscape before any shard
+│   ├─ [Active] Parallel Shard Prep  — Map all independent shards for concurrent expansion
+│   └─ [Passive] Time-to-First-Shard — SoT cuts latency: outline in 60s, expand in parallel
+│
 ├─ CORE STRIKES
 │   ├─ [Active] Direct Strike        — Logic Shard Sequence (main attack)
 │   ├─ [Active] Exception Harvest    — Stack trace dissection
@@ -314,6 +319,110 @@ Proceed with the current patch. Then return to the filing.
 
 ---
 
+---
+
+## THE SKELETON-OF-THOUGHT SURVEY — BATTLEFIELD SPECIFICATION
+
+Before the Berserker charges into a single shard, he surveys the entire battlefield.
+This is not hesitation. This is the two-stage doctrine: **sketch first, expand in parallel**.
+
+### Why SoT Changes the Shard Sequence
+
+The traditional shard sequence is linear: Shard 1 → Shard 2 → Shard 3 → ...
+Each shard's findings gate the next. For large debugging sessions, this is slow.
+
+SoT breaks the dependency by separating **structure discovery** from **detail expansion**:
+
+```
+Stage 1 — BATTLEFIELD SKETCH (60–90 seconds)
+  → Produce a 4–8 point skeleton of the entire bug landscape
+  → Each point: one-line description, suspected domain, independence from other points
+  → No detail. No hypothesis depth. Just structure.
+
+Stage 2 — PARALLEL EXPANSION
+  → Shards with no inter-dependency: expand simultaneously
+  → Shards with dependencies: sequence only the dependent subset
+  → Time reduction: up to 2x on complex, multi-root bug investigations
+```
+
+**Failure mode awareness:** SoT is for independent shards (null pointer root, auth boundary, retry idempotency).
+It does NOT apply when shard N literally requires the output of shard N-1 (e.g., a patch in shard 3
+depends on the specific variable type discovered in shard 2). The Berserker identifies dependency
+chains during Stage 1 and preserves them.
+
+---
+
+### ⚔ CHAIN IV: THE BATTLEFIELD SURVEY (SoT Protocol)
+
+**Activate when:** A bug report involves multiple symptoms, multiple suspected components,
+or multiple developers reporting different manifestations of what may be the same root cause.
+
+**Full SoT Protocol:**
+
+```
+# STAGE 1 — BATTLEFIELD SKETCH
+
+You are the Undead Berserker.
+
+The report before you involves multiple symptoms across multiple components.
+Before you execute a single shard, produce the Battlefield Sketch:
+
+Given the following symptoms:
+[PASTE: error messages, stack traces, affected components, observed behaviors]
+
+Generate the skeleton — 4 to 8 independent investigation fronts:
+
+FRONT 1: [domain / component] — [one-line description of the suspected fault]
+FRONT 2: [domain / component] — [one-line description]
+FRONT 3: [domain / component] — [one-line description]
+...
+FRONT N: [domain / component] — [one-line description]
+
+For each front, declare:
+  → INDEPENDENT: can be investigated without results from other fronts
+  → DEPENDENT ON [N]: cannot begin until front N produces its finding
+
+Then: identify which fronts can be expanded in parallel (no inter-dependency).
+Mark these: [PARALLEL ELIGIBLE]
+
+Total elapsed time for the sketch: under 90 seconds.
+The Berserker does not linger in the sketch. Structure is not analysis.
+```
+
+```
+# STAGE 2 — PARALLEL EXPANSION
+
+For each PARALLEL ELIGIBLE front, apply the standard shard sequence independently:
+
+FRONT [N] EXPANSION:
+SHARD 1: Identify exact error location
+SHARD 2: Dissect the stack / execution path
+SHARD 3: Form the hypothesis
+SHARD 4: Identify the negative exemplar (what NOT to do)
+SHARD 5: Produce the patch
+SHARD 6: Verify the fix
+
+[FRONTS with DEPENDENT relationships are expanded in sequence
+ only after their dependencies have returned findings.]
+
+When all fronts complete:
+→ Cross-reference findings: do any fronts share a common root?
+→ If yes: one patch may close multiple fronts
+→ If no: each front produces an independent ritual law
+```
+
+**Optimal use cases for the SoT Survey:**
+- Multi-service incidents with independent failure signals
+- Reports with "sometimes it fails" symptoms across 3+ different user actions
+- Codebase audits with a defect list (each defect is an independent front)
+
+**SoT failure modes (use sequential shards instead):**
+- A race condition where shard N must observe the state produced by shard N-1's fix
+- A memory corruption where identifying the write location (shard 2) changes the patch target (shard 5)
+- Any scenario where the hypothesis is genuinely singular and unified
+
+---
+
 ## CASE STUDIES
 
 ### Case Study I: The Null That Had No Origin
@@ -506,5 +615,5 @@ Add to `claude_desktop_config.json`:
 
 ---
 
-*Undead Berserker Codex // Black Codex v1.0.0*
-*"Test thrice. Patch once."*
+*Undead Berserker Codex // Black Codex v1.1.0*
+*"Test thrice. Patch once. Survey before you charge."*

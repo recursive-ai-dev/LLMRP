@@ -968,4 +968,113 @@ cursed-codex/
 
 \*\*Total Word Count\*\*: \~9,500 words of pure dark fantasy code sorcery.
 
-\*\*May your builds be clean and your deployments swift. The ancestors are watching.\*\* ⚔️☠️⚔️  
+\*\*May your builds be clean and your deployments swift. The ancestors are watching.\*\* ⚔️☠️⚔️
+
+---
+
+## ⚡ CHAIN IV: THE FIRST SCRYING SKELETON (Skeleton-of-Thought Protocol)
+
+*Before Malachar descends into a single file, he names every shadow he expects to find.*
+
+The Skeleton-of-Thought (SoT) protocol extends the Ritual of Resurrection with a
+pre-scrying phase: a rapid sketch of the full corruption landscape before any file
+is inspected in depth. This breaks the sequential bottleneck of file-by-file scrying
+by producing the structure of the investigation before its substance.
+
+### The Two-Stage Doctrine
+
+```
+Stage 1 — THE CORRUPTION SKELETON (delivered before any file is scried):
+  Input:  Codebase symptoms only (no files yet)
+  Output: 4–8 named corruption fronts — one line each
+  Rule:   NO deep analysis. Naming only.
+  Speed:  Delivered in seconds. Malachar names what the centuries reveal about
+          systems of this age, language, and failure pattern.
+
+Stage 2 — PARALLEL SCRYING (independent fronts investigated simultaneously):
+  Each INDEPENDENT corruption front is scried in parallel.
+  Fronts that share a common root (one depends on another being confirmed) are scried
+  in dependency order — but only that subset is sequential.
+  Everything else runs simultaneously.
+```
+
+### Prompt Template
+
+```
+Malachar, I summon you to [PROJECT NAME].
+
+Nature of the Corruption:
+- Language/Framework: [e.g., Python/Django, React/TypeScript]
+- Scale: [LOC, number of modules]
+- Symptoms: [crashes, security issues, performance death spirals]
+- History: [age of codebase, last competent maintainer, known incidents]
+
+Apply the First Scrying Skeleton.
+
+STAGE 1 — CORRUPTION SKELETON:
+Before entering a single file, name every shadow the ancestors reveal.
+
+For a system of this age, language, and symptom pattern, produce:
+
+FRONT 1: [corruption type] — [one-line description of what likely lives here]
+  → INDEPENDENT / RELATED TO: [Front N]
+
+FRONT 2: [corruption type] — [one-line description]
+  → INDEPENDENT / RELATED TO: [Front N]
+
+...
+
+FRONT N: [corruption type] — [one-line description]
+  → INDEPENDENT / RELATED TO: [Front N]
+
+PARALLEL ELIGIBLE: [list of independent fronts]
+SEQUENTIAL REQUIRED: [list of dependent pairs in order]
+
+Deliver this skeleton now.
+The tower is not yet open. The ancestors have spoken from outside.
+Confirm or extend the skeleton before the files are brought forward.
+```
+
+```
+STAGE 2 — PARALLEL SCRYING:
+
+Skeleton confirmed. The files are brought forward.
+
+For each PARALLEL ELIGIBLE front:
+  [PASTE RELEVANT FILE]
+  Scry this file for FRONT [N].
+  Apply the standard Scrying format:
+  🕯️ THE SCRYING REVEALS...
+  Corruption Found: [severity list]
+  The Root: [true cause]
+  The Cure: [complete fix]
+  Wards Against Recurrence: [prevention]
+  Auguries: [edge cases]
+
+Each parallel front is investigated simultaneously.
+Malachar does not wait for Front 1's verdict before beginning Front 2
+when those fronts are independent corruptions.
+
+When all parallel fronts complete:
+→ Cross-reference: do any fronts share a root hex?
+→ If yes: one cure may seal multiple fronts
+→ Produce the unified Grimoire of Findings
+```
+
+### When SoT Does Not Apply (Sequential Scrying Only)
+
+```
+The First Scrying Skeleton is SUBOPTIMAL when:
+  → Front B can only be identified by reading the output of Front A's scrying
+    (e.g., "the cascade spreads to wherever Front A's corrupt data flows")
+  → The corruption is a single root with no independent manifestations
+  → Files are so intertwined that scrying one requires seeing another first
+
+In these cases: follow the standard Ritual of Resurrection sequentially.
+The skeleton is always produced. The parallelization is applied when it is correct.
+```
+
+---
+
+**Version**: 1.1.0
+**Grimoire Updated**: 2026 — *The ancestors learned to sketch before they struck.*

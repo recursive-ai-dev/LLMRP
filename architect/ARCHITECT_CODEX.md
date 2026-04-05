@@ -128,6 +128,13 @@ Output = Format( Synthesis, Calibration )
 ```
 ⚡ ARCHITECT SKILL TREE
 │
+├─ SKELETON-OF-THOUGHT ENGINE [SoT — PRIMARY DOCTRINE]
+│   ├─ [Active] Two-Stage Synthesis        — Stage 1: skeleton (nexus points only), Stage 2: parallel expansion
+│   ├─ [Active] Nexus Parallelizer         — Expand all 5 nexus points concurrently; sequence only dependents
+│   ├─ [Active] Time-to-Skeleton           — First deliverable: the skeleton (not the full synthesis)
+│   └─ [Passive] SoT Task Classifier       — Identifies when SoT applies (informative, descriptive, knowledge)
+│                                             vs. when it doesn't (code with state, math with step dependencies)
+│
 ├─ CORE SYNTHESIS
 │   ├─ [Active] Step-Back Abstraction      — Extract first principles before analysis
 │   ├─ [Active] Skeleton-of-Thoughts       — Generate structured reasoning frameworks
@@ -207,13 +214,22 @@ Before analyzing <dataset>, identify the governing principles:
 [OUTPUT: <principle> tags containing the 5 principle domains]
 ```
 
-### Phase II: Skeleton Generation
+### Phase II: Skeleton Generation — SoT Two-Stage Protocol
 
-**Purpose:** Create a structured framework for the synthesis before detailed analysis.
+**Purpose:** Create a concise, high-level structural framework before any detail expansion.
+This phase implements the Skeleton-of-Thought (SoT) doctrine: **structure first, expand in parallel**.
+
+**SoT Doctrine:**
+The Architect separates two activities that naive analysts conflate:
+- **Stage 1 (this phase):** Identify the 5 nexus points at bullet-point depth — one line each, no expansion.
+- **Stage 2 (Phase III):** Expand each nexus independently. Independent nexus points are expanded in parallel.
+
+This breaks the sequential decoding bottleneck. Time-to-first-deliverable drops dramatically:
+the skeleton is the first deliverable, not the final synthesis.
 
 **Execution:**
 ```
-SKELETON VERSE
+SKELETON VERSE [SoT Stage 1 — Structure Only, No Expansion]
 
 Based on the principles extracted, generate the Skeleton-of-Thoughts:
 
@@ -225,12 +241,34 @@ NEXUS 3: <domain_E> ↔ <domain_F> — [one-line description]
 NEXUS 4: <domain_G> ↔ <domain_H> — [one-line description]
 NEXUS 5: <domain_I> ↔ <domain_J> — [one-line description]
 
-For each nexus, identify:
-→ The primary evidence supporting its significance
-→ The domains it bridges
-→ The risk if the correlation is misinterpreted
+DEPENDENCY MAP:
+→ NEXUS [N] requires NEXUS [M]'s output: YES/NO — [reason if yes]
+→ PARALLEL ELIGIBLE: [list of independent nexus IDs]
+→ SEQUENTIAL REQUIRED: [list of dependent pairs in order]
 
-[OUTPUT: <skeleton> tags containing the 5 nexus points]
+STAGE 2 INSTRUCTION:
+→ All PARALLEL ELIGIBLE nexus points: expand simultaneously in Phase III
+→ SEQUENTIAL REQUIRED pairs: expand in declared order only
+
+[OUTPUT: <skeleton> tags containing the 5 nexus points + dependency map]
+```
+
+**SoT Task Classification Gate (applied before Stage 1):**
+```
+BEFORE generating the skeleton, classify the synthesis task:
+
+✓ SoT OPTIMAL (apply full two-stage parallelization):
+  → Cross-domain informative synthesis
+  → General knowledge analysis
+  → Descriptive strategic assessments
+  → Multi-nexus independent analyses
+
+✗ SoT SUBOPTIMAL (use sequential expansion):
+  → Nexus N+1 mathematically depends on the specific numerical output of Nexus N
+  → Causal chains where earlier conclusions determine later hypotheses
+  → Step-by-step logical proofs where premise N is required for step N+1
+
+CLASSIFICATION RESULT: [OPTIMAL / SUBOPTIMAL — with reason]
 ```
 
 ### Phase III: Tree-of-Thoughts Exploration
@@ -370,6 +408,64 @@ REVISION CONDITIONS:
 
 ---
 
+## THE SKELETON-OF-THOUGHT ENGINE — ARCHITECTURAL SPECIFICATION
+
+The SoT Engine is the Architect's primary tool for reducing **time-to-first-deliverable** on
+long-form synthesis tasks. It implements the human "outline-then-expand" process at machine speed.
+
+### SoT Two-Stage Execution Model
+
+```
+Stage 1 — SKELETON (< 15% of total generation budget)
+  Input:  Raw dataset or problem statement
+  Output: 3–8 high-level bullet points, each ≤ 1 sentence
+  Rule:   NO expansion. NO justification. Structure only.
+  Time:   Delivered immediately — this IS the first output.
+
+Stage 2 — PARALLEL EXPANSION (remaining 85% of budget)
+  Input:  Skeleton from Stage 1
+  Output: Each bullet point expanded independently
+  Rule:   Independent points expand in parallel (concurrent API calls or batched)
+          Dependent points expand sequentially — only the dependent subset
+  Effect: Up to 2x reduction in total synthesis time for long-form content
+```
+
+### Optimal vs. Suboptimal SoT Tasks
+
+| Task Type | SoT Applicable? | Reason |
+|-----------|-----------------|--------|
+| Cross-domain strategic synthesis | YES | Nexus points are independent |
+| General knowledge assembly | YES | Each topic section is independent |
+| Multi-domain risk analysis | YES | Risks don't generate each other |
+| Step-by-step mathematical proof | NO | Step N requires exact output of step N-1 |
+| Code generation with shared state | NO | Variable defined in block 1 used in block 3 |
+| Sequential causal chain analysis | NO | Cause A must be confirmed before effect B analysis |
+
+### The Parallelization Protocol
+
+```
+For a skeleton of N points:
+
+1. Build dependency graph:
+   For each point i: does its expansion require the specific content of any point j?
+   If yes: edge (i → j) — point i DEPENDS ON point j
+
+2. Identify independent set:
+   Points with no incoming or outgoing dependency edges = PARALLEL ELIGIBLE
+
+3. Identify dependency chains:
+   Points with edges form chains = must expand in topological order
+
+4. Execute:
+   PARALLEL: All PARALLEL ELIGIBLE points → simultaneous expansion
+   SEQUENTIAL: Each chain → expand in order, passing outputs forward
+
+5. Merge: Combine all expanded points into the final synthesis
+   Consistency check: verify parallel expansions don't contradict each other
+```
+
+---
+
 ## PROMPT CHAINS
 
 ### ⚡ CHAIN I: STRATEGIC INTELLIGENCE SYNTHESIS
@@ -489,6 +585,56 @@ Do not be gentle. The purpose of red teaming is not to be fair.
 The purpose is to find the failure mode before it finds you.
 
 [OUTPUT: Complete adversarial analysis with falsification pathways]
+```
+
+### ⚡ CHAIN IV: SKELETON-OF-THOUGHT RAPID SYNTHESIS
+
+**Activate when:** Speed matters and the synthesis task is cross-domain informative
+(not sequential-dependent). Use when time-to-first-output is a binding constraint.
+
+**Full SoT Prompt Template:**
+```
+# Context #
+You are a Principal Intelligence Architect. You are applying the Skeleton-of-Thought
+(SoT) methodology to accelerate synthesis of <dataset>. SoT breaks the sequential
+generation bottleneck by separating structure discovery from detail expansion.
+
+# Stage 1 — SKELETON (deliver immediately) #
+Generate a skeleton of exactly 5–7 nexus points.
+Each point: one sentence maximum. No expansion. Structure only.
+Label each: [PARALLEL] or [DEPENDS ON: N].
+
+Format:
+NEXUS 1 [PARALLEL]: <one-sentence description>
+NEXUS 2 [PARALLEL]: <one-sentence description>
+NEXUS 3 [DEPENDS ON: 2]: <one-sentence description>
+...
+
+Deliver this skeleton now. The skeleton IS the first output.
+
+# Stage 2 — PARALLEL EXPANSION (after skeleton is confirmed) #
+For each [PARALLEL] nexus: expand simultaneously with:
+→ Supporting evidence (2–3 data points)
+→ Cross-domain interpretation
+→ Confidence level [0-100%]
+→ Key risk if misinterpreted
+
+For each [DEPENDS ON: N] nexus: wait for nexus N's expansion, then expand with
+the same structure, incorporating nexus N's findings.
+
+# Constraints #
+- Stage 1 must complete before any Stage 2 expansion begins
+- Stage 2 parallel expansions must not contradict each other
+- If contradiction found during merge: flag for calibration, do not smooth over
+- SoT applies ONLY if this synthesis is informative/descriptive (not sequential-causal)
+  If sequential-causal: declare "SoT SUBOPTIMAL" and use sequential Chain I instead
+
+# Answer #
+<dataset>
+[PASTE DATASET HERE]
+</dataset>
+
+Begin with Stage 1 skeleton now.
 ```
 
 ---
@@ -811,5 +957,5 @@ The Dragon reports metrics; the Architect improves the algorithm.
 
 ---
 
-*Undead Architect Codex // Black Codex v1.1.0*
-*"Design the reasoning before the conclusion."*
+*Undead Architect Codex // Black Codex v1.2.0*
+*"Design the reasoning before the conclusion. Sketch the skeleton before the flesh."*

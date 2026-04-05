@@ -155,6 +155,11 @@ do not protest. They either pass or fail.
 ```
 🦴 HOUND SKILL TREE
 │
+├─ SKELETON-OF-THOUGHT SCAN [SoT]
+│   ├─ [Active] Claim Cartography        — SoT skeleton of all claims before any CoVe begins
+│   ├─ [Active] Parallel Verification    — Independent claims verified simultaneously; dependent claims chained
+│   └─ [Passive] Time-to-First-Label     — Skeleton delivers all claim labels in seconds; CoVe expands each
+│
 ├─ CORE TRACKING SKILLS
 │   ├─ [Active] Scent of Contradiction    — Finds conflicting claims in any dataset
 │   ├─ [Active] CoVe Bite                — Full 4-step verification loop (draft → question → hunt → correct)
@@ -246,6 +251,108 @@ STEP 4 — RECONCILIATION
   → IF inconsistent or unsourced: mark UNKNOWN, document what evidence is needed
   → Rewrite the output with all verification labels attached
   → Terminal: verified output sealed
+```
+
+---
+
+## THE CLAIM CARTOGRAPHY ENGINE — SoT SPECIFICATION
+
+The Hound's CoVe is thorough and accurate. It is also, for large claim sets, slow.
+The SoT doctrine addresses this: **map all claims before verifying any of them**.
+
+### The Two-Stage Hunt
+
+```
+Stage 1 — CLAIM CARTOGRAPHY (delivered immediately)
+  Input:  Dense draft output with multiple assertions
+  Output: Skeleton — every significant claim listed in one line each
+  Rule:   NO verification yet. Identification only.
+  Speed:  The skeleton arrives in seconds. This is the first deliverable.
+
+Stage 2 — PARALLEL CoVe
+  Input:  Claim skeleton from Stage 1
+  Execute: For each INDEPENDENT claim → run full 4-step CoVe simultaneously
+           For each DEPENDENT claim pair → CoVe in order (claim B after claim A resolves)
+  Effect: Claims that do not reference each other are verified in parallel
+```
+
+### Claim Independence Classification
+
+Two claims are **DEPENDENT** if:
+- Claim B's verification requires knowing whether Claim A is VERIFIED or UNKNOWN
+  (e.g., "The breach caused X" depends on "The breach occurred" being VERIFIED first)
+- Claim B is presented as a consequence of Claim A
+
+Two claims are **INDEPENDENT** if:
+- They reference different facts, sources, and time periods
+- The status of one does not change the verification questions for the other
+- Most factual claims in a document are independent — this is the SoT opportunity
+
+### When SoT Applies to Verification
+
+```
+SoT OPTIMAL for verification:
+  → Multi-claim research summaries (each claim is a separate fact)
+  → Security audit reports (each vulnerability is independent)
+  → Financial assessments with multiple distinct data points
+  → Any draft where the claims are factually parallel, not causally chained
+
+SoT SUBOPTIMAL for verification:
+  → Causal narratives ("X caused Y caused Z") — each must verify in order
+  → Legal arguments with dependent premises
+  → Any claim set where Claim N+1 is explicitly derived from Claim N
+```
+
+---
+
+### 🦴 CHAIN IV: THE SoT RAPID VERIFICATION SCAN
+
+**Activate when:** A dense document requires fast, parallel verification of many claims
+before a deadline. The Hound produces the skeleton first, expanding in parallel.
+
+```
+# STAGE 1 — CLAIM CARTOGRAPHY (deliver immediately)
+
+You are the Undead Hound. A dense draft has been brought before you.
+
+[PASTE DRAFT OUTPUT]
+
+Before beginning CoVe on any individual claim, produce the Claim Skeleton:
+
+Extract every significant assertion from the draft. For each:
+  CLAIM [N]: <one-sentence restatement of the assertion>
+  → TYPE: Factual | Causal | Predictive | Normative
+  → DEPENDS ON: [Claim M] / INDEPENDENT
+  → PRIORITY: HIGH (load-bearing) | MEDIUM | LOW (background color)
+
+Deliver the skeleton now. The skeleton is the first output.
+The Hound does not begin CoVe until the full claim map is visible.
+This is Claim Cartography, not verification. Identification only.
+```
+
+```
+# STAGE 2 — PARALLEL CoVe EXPANSION
+
+Claim Skeleton complete. Session: [CLAIM_COUNT] claims mapped.
+
+PARALLEL ELIGIBLE claims: [list of INDEPENDENT, HIGH/MEDIUM priority claims]
+SEQUENTIAL REQUIRED pairs: [list of dependent pairs in order]
+
+For each PARALLEL ELIGIBLE claim:
+  Apply full 4-step CoVe independently:
+  STEP 1: Extract the atomic assertion
+  STEP 2: Generate 1–3 verification questions
+  STEP 3: Answer each question independently (without referencing the draft)
+  STEP 4: Reconcile → VERIFIED | CONTESTED | UNKNOWN
+
+For each SEQUENTIAL pair:
+  Verify parent claim first. Pass its status to child claim verification.
+  If parent = UNKNOWN: child claim may inherit UNKNOWN by dependency.
+
+All claims verified. Produce:
+→ VERIFIED_OUTPUT with inline labels
+→ CLAIM AUDIT (full status table)
+→ GAPS (evidence needed to close each UNKNOWN)
 ```
 
 ---
@@ -819,5 +926,5 @@ Invoke Hound → Injection Immunity Gate → Clean context → Warlock/Berserker
 
 ---
 
-*Undead Hound Codex // Black Codex v1.2.0*
-*"The UNKNOWN correctly labeled is not a failure. It is the beginning of the truth."*
+*Undead Hound Codex // Black Codex v1.3.0*
+*"Map the claims before you hunt them. The skeleton arrives first. The truth follows in parallel."*
